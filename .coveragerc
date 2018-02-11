@@ -1,0 +1,16 @@
+[paths]
+source =
+   src/two_player_ai
+   */site-packages/two_player_ai
+
+[run]
+branch = true
+source =
+    two_player_ai
+    tests
+parallel = true
+
+[report]
+show_missing = true
+precision = 2
+omit = *migrations*
