@@ -2,15 +2,18 @@ import numba as nb
 import numpy as np
 
 from two_player_ai.game import Game
+from two_player_ai.othello.utils import boards_equal
+from two_player_ai.othello.zobrist import Zobrist
 
 
 class OthelloBoard(object):
     BLACK_PLAYER = 1
     WHITE_PLAYER = -1
 
-    def __init__(self, board=None, size=8):
-        self.size = size
+    def __init__(self, board=None, uid=None):
+        self.size = 8
         self.board = self.initial_board() if board is None else board
+        self.uid = Zobrist.from_state(self) if uid is None else uid
 
     def initial_board(self):
         """
@@ -38,13 +41,13 @@ class OthelloBoard(object):
         Returns:
             A clone of the current state
         """
-        return OthelloBoard(size=self.size, board=np.copy(self.board))
+        return OthelloBoard(board=np.copy(self.board), uid=self.uid)
 
     def __eq__(self, other):
-        return np.array_equal(self.board, other.board)
+        return boards_equal(self.board, other.board)
 
     def __hash__(self):
-        return self.board.tostring().__hash__()
+        return self.uid
 
 
 class Othello(Game):
@@ -60,7 +63,7 @@ class Othello(Game):
     ]
 
     @staticmethod
-    def initial_state(size=8):
+    def initial_state():
         """
         The initial state of the game.
 
@@ -68,7 +71,7 @@ class Othello(Game):
                  player playing
 
         """
-        return OthelloBoard(size=size), OthelloBoard.BLACK_PLAYER
+        return OthelloBoard(), OthelloBoard.BLACK_PLAYER
 
     @staticmethod
     def actions(state, player):
@@ -113,6 +116,8 @@ class Othello(Game):
         result_state = state.clone()
         board = result_state.board
 
+        uid = result_state.uid
+
         if action:
             aux = np.zeros(result_state.board.shape, dtype=np.bool)
 
@@ -121,8 +126,11 @@ class Othello(Game):
                 if flips:
                     for flip in zip(*flips):
                         result_state.board[flip] = player
+                        uid = Zobrist.update_flip(uid, flip)
 
+            uid = Zobrist.update_action(uid, action, player)
             result_state.board[action] = player
+            result_state.uid = uid
 
         return result_state, -player
 

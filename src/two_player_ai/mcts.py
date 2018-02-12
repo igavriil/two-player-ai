@@ -99,7 +99,7 @@ class Mcts(object):
     @staticmethod
     def uct_select_child(node, exploration):
         result = None
-        max_uct = -1
+        max_uct = -np.inf
         for child in node.child_nodes:
             child_uct = Mcts.calculate_uct_value(child, exploration)
             if child_uct > max_uct:
