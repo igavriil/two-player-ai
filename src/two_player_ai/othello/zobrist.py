@@ -28,7 +28,7 @@ class Zobrist(object):
                               [1, -1])
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def hash(board, black_table, white_table):
         result = 0
         for row, col in zip(*np.where(board == 1)):
@@ -40,7 +40,7 @@ class Zobrist(object):
         return result
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def update(previous, square, black_table, white_table, players):
         result = previous
         row, col = square

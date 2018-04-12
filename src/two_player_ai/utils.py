@@ -1,6 +1,10 @@
 import time
 
 
+def multi(method, args):
+    return method(*args)
+
+
 class cached_property(object):
     """
     Descriptor (non-data) for building an attribute on-demand on first use.

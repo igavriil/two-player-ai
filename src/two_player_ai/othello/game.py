@@ -2,7 +2,7 @@ import numba as nb
 import numpy as np
 
 from two_player_ai.game import Game
-from two_player_ai.othello.utils import boards_equal
+from two_player_ai.othello.utils import boards_equal, cannonical_board
 from two_player_ai.othello.zobrist import Zobrist
 
 
@@ -72,6 +72,12 @@ class Othello(Game):
 
         """
         return OthelloBoard(), OthelloBoard.BLACK_PLAYER
+
+    @staticmethod
+    def cannonical_state(state, player):
+        cannonical = state.clone()
+        cannonical.board = cannonical_board(cannonical.board, player)
+        return cannonical, player * player
 
     @staticmethod
     def actions(state, player):
@@ -180,7 +186,7 @@ class Othello(Game):
             return 0.5
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def forward_actions(board, player, actions, directions):
         size = board[0].size
         for row, col in zip(*np.where(board == player)):
@@ -201,7 +207,7 @@ class Othello(Game):
         return np.where(actions)
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def reverse_actions(board, player, actions, directions):
         size = board[0].size
         for row, col in zip(*np.where(board == 0)):
@@ -221,7 +227,7 @@ class Othello(Game):
         return np.where(actions)
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def has_forward_actions(board, player, directions):
         size = board[0].size
         for row, col in zip(*np.where(board == player)):
@@ -242,7 +248,7 @@ class Othello(Game):
         return False
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def has_reverse_actions(board, player, directions):
         size = board[0].size
         for row, col in zip(*np.where(board == 0)):
@@ -262,7 +268,7 @@ class Othello(Game):
         return False
 
     @staticmethod
-    @nb.jit(nopython=True, cache=True)
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def flips(board, player, aux, square, direction):
         size = board[0].size
         row, col = square

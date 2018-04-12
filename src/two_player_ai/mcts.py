@@ -1,11 +1,12 @@
+import math
+import multiprocessing
 import numpy as np
 from random import sample
 from two_player_ai.utils import benchmark, cached_property
 
 
 class MctsTreeNode(object):
-    def __init__(self, game, state, player, parent=None, action=None):
-        self.game = game
+    def __init__(self, state, player, parent=None, action=None):
         self.state = state
         self.player = player
         self.parent = parent
@@ -18,39 +19,9 @@ class MctsTreeNode(object):
     def performer(self):
         return self.parent.player if self.parent else None
 
-    @cached_property
-    def terminal_state(self):
-        return self.game.terminal_test(self.state, self.player)
-
-    def has_child_nodes(self):
-        return len(self.child_nodes) > 0
-
-    def is_fully_expanded(self):
-        return len(self.get_all_actions) == len(self.child_nodes)
-
-    @cached_property
-    def has_available_actions(self):
-        return len(self.get_all_actions) > 0
-
-    def has_unvisited_child(self):
-        return any([child.visit_count == 0 for child in self.child_nodes])
-
-    @cached_property
-    def get_all_actions(self):
-        return set(self.game.actions(self.state, self.player))
-
-    def get_tried_actions(self):
-        return set([child_node.action for child_node in self.child_nodes])
-
-    def get_untried_actions(self):
-        return self.get_all_actions - self.get_tried_actions()
-
-    def add_child(self, action=None):
-        child_state, player = self.game.result(self.state, self.player, action)
-        child_node = MctsTreeNode(self.game, child_state, player, parent=self,
-                                  action=action)
-        self.child_nodes.append(child_node)
-        return child_node
+    def add_child(self, child):
+        self.child_nodes.append(child)
+        return child
 
     def get_domain_theoretic_value(self):
         return self.total_reward / self.visit_count
@@ -61,46 +32,105 @@ class MctsTreeNode(object):
 
 
 class Mcts(object):
+    def __init__(self, game, exploration=0.8, iterations=10):
+        self.game = game
+        self.exploration = exploration
+        self.iterations = iterations
+
     @staticmethod
     @benchmark
     def uct(game, state, player, exploration=0.8, iterations=10):
-        root_node = MctsTreeNode(game, state, player)
+        root_node = MctsTreeNode(state, player)
 
-        for i in range(iterations):
-            selected_node = Mcts.tree_policy(root_node, exploration)
-            terminal_state, last_player = Mcts.simulate(game, selected_node)
-            Mcts.backpropagate(selected_node, game, terminal_state)
+        return Mcts.uct_node(game, root_node, player, exploration, iterations)
 
-        best_child = Mcts.uct_select_child(root_node, 0.0)
+    @staticmethod
+    @benchmark
+    def uct_root(game, state, player, exploration=0.8, iterations=10):
+        processes = multiprocessing.cpu_count()
+        root_node = MctsTreeNode(state, player)
+        iterations = math.ceil(iterations / processes)
+        with multiprocessing.Pool(processes) as pool:
+            results = pool.starmap(
+                Mcts.uct_node,
+                [
+                    (game, root_node, player, exploration, iterations)
+                    for _ in range(processes)
+                ]
+            )
+
+        return Mcts.best_child(results, exploration)
+
+    @staticmethod
+    @benchmark
+    def uct_leaf(game, state, player, exploration=0.8, iterations=10):
+        processes = multiprocessing.cpu_count()
+        root_node = MctsTreeNode(state, player)
+        iterations = math.ceil(iterations / processes)
+        with multiprocessing.Pool(processes) as pool:
+            for i in range(iterations):
+                node = Mcts.tree_policy(game, root_node, exploration)
+                results = pool.starmap(
+                    Mcts.simulate,
+                    [
+                        (game, node)
+                        for _ in range(processes)
+                    ]
+                )
+                for terminal_state, _ in results:
+                    Mcts.backpropagate(game, node, terminal_state)
+
+        best_child = Mcts.uct_select_child(root_node, exploration)
+
         return best_child
 
     @staticmethod
-    def tree_policy(node, exploration):
-        while not node.terminal_state:
-            if not node.has_available_actions:
-                node = Mcts.expand_without_action(node)
+    def uct_node(game, root_node, player, exploration, iterations):
+        for i in range(iterations):
+            node = Mcts.tree_policy(game, root_node, exploration)
+            terminal_state, last_player = Mcts.simulate(game, node)
+            Mcts.backpropagate(game, node, terminal_state)
+        best_child = Mcts.uct_select_child(root_node, exploration)
+
+        return best_child
+
+    @staticmethod
+    def tree_policy(game, node, exploration):
+        while not game.terminal_test(node.state, node.player):
+            available_actions = set(game.actions(node.state, node.player))
+            if not available_actions:
+                node = Mcts.expand_without_action(game, node)
                 return node
-            elif not node.is_fully_expanded():
-                node = Mcts.expand_with_action(node)
+            elif not len(node.child_nodes) == len(available_actions):
+                node = Mcts.expand_with_action(game, node)
                 return node
             else:
                 node = Mcts.uct_select_child(node, exploration)
         return node
 
     @staticmethod
-    def expand_with_action(node):
-        action = sample(node.get_untried_actions(), 1)[0]
-        return node.add_child(action=action)
+    def expand_with_action(game, node):
+        available_actions = set(game.actions(node.state, node.player))
+        explored_actions = set([child.action for child in node.child_nodes])
+
+        action = sample(available_actions - explored_actions, 1)[0]
+        state, player = game.result(node.state, node.player, action)
+        child = MctsTreeNode(state, player, parent=node, action=action)
+        return node.add_child(child)
 
     @staticmethod
     def expand_without_action(node):
-        return node.add_child(action=None)
+        return node.add_child(None)
 
     @staticmethod
     def uct_select_child(node, exploration):
+        return Mcts.best_child(node.child_nodes, exploration)
+
+    @staticmethod
+    def best_child(chidlren, exploration):
         result = None
         max_uct = -np.inf
-        for child in node.child_nodes:
+        for child in chidlren:
             child_uct = Mcts.calculate_uct_value(child, exploration)
             if child_uct > max_uct:
                 max_uct = child_uct
@@ -121,11 +151,9 @@ class Mcts(object):
         return state, player
 
     @staticmethod
-    def backpropagate(node, game, terminal_state):
+    def backpropagate(game, node, terminal_state):
         winner = game.winner(terminal_state)
         while node:
-            # node.state player is the player to play next
-            # not the player that played the move
             if winner == node.performer:
                 reward = 1
             elif winner == node.player:
@@ -137,4 +165,7 @@ class Mcts(object):
 
     @staticmethod
     def calculate_uct_value(node, exploration):
-        return node.get_domain_theoretic_value() + exploration * np.sqrt(np.log(node.parent.visit_count) / node.visit_count)
+        return node.get_domain_theoretic_value() + \
+               exploration * np.sqrt(
+               np.log(node.parent.visit_count) / node.visit_count
+            )

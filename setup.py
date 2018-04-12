@@ -63,6 +63,8 @@ setup(
     install_requires=[
         'numpy',
         'numba',
+        'tensorflow',
+        'keras'
     ],
     extras_require={
         # eg:
