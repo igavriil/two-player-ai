@@ -158,6 +158,8 @@ class Mcts(object):
         while node:
             if winner == node.performer:
                 reward = 1
+            elif winner == node.player:
+                reward = -1
             else:
                 reward = 0
             node.update_domain_theoretic_value(reward)

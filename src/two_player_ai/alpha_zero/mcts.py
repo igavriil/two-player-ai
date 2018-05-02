@@ -6,14 +6,14 @@ from two_player_ai.utils import benchmark, cached_property
 
 
 class MctsTreeNode(object):
-    def __init__(self, state, player, parent=None, action=None, previous_probabily=0):
+    def __init__(self, state, player, parent=None, action=None, policy=0):
         self.state = state
         self.player = player
         self.parent = parent
         self.action = action
         self.visit_count = 0
         self.total_reward = 0.0
-        self.previous_probabily = previous_probabily
+        self.policy = policy
         self.child_nodes = []
 
     @cached_property
@@ -45,18 +45,18 @@ class MctsTreeNode(object):
 class Mcts(object):
     @staticmethod
     @benchmark
-    def uct(game, state, player, exploration=0.8, iterations=10):
-        root_node = MctsTreeNode(state, player, root=True)
+    def uct(game, state, player, model, exploration=0.8, iterations=10):
+        root_node = MctsTreeNode(state, player)
 
-        return Mcts.uct_node(game, root_node, player, exploration, iterations)
+        return Mcts.uct_node(game, root_node, player, model, exploration, iterations)
 
     @staticmethod
-    def uct_node(game, root_node, player, exploration, iterations):
+    def uct_node(game, root_node, player, model, exploration, iterations):
         for i in range(iterations):
             node = Mcts.tree_policy(game, root_node, exploration)
-            terminal_state, last_player = Mcts.simulate(game, node)
+            terminal_state, last_player = Mcts.simulate(game, node, model)
             Mcts.backpropagate(game, node, terminal_state)
-        best_child = Mcts.uct_select_child(root_node, exploration)
+        best_child = Mcts.uct_select_child(root_node, None, exploration, 0)
 
         return best_child
 
@@ -102,10 +102,11 @@ class Mcts(object):
         return Mcts.best_child(node.child_nodes, noise, exploration, epsilon)
 
     @staticmethod
-    def best_child(chidlren, noise, exploration, epsilon):
+    def best_child(children, noise, exploration, epsilon):
         result = None
         max_uct = -np.inf
-        for child, child_noise in zip(chidlren, noise):
+        noise = [0] * len(children) if noise is None else noise
+        for child, child_noise in zip(children, noise):
             child_uct = Mcts.calculate_uct_value(
                 child, child_noise, exploration, epsilon
             )
@@ -116,12 +117,22 @@ class Mcts(object):
         return result
 
     @staticmethod
-    def simulate(game, node):
+    def simulate(game, node, model):
         state, player = node.state, node.player
         while not game.terminal_test(state, player):
             available_actions = game.actions(state, player)
             if available_actions:
-                action = sample(available_actions, 1)[0]
+                available_actions_mask = game.actions_mask(state, player)
+                policy, _ = model.predict(state.binary_form)
+                policy_probs = policy[0].reshape(available_actions_mask.shape)
+                action_probs = available_actions_mask * policy_probs
+                action_probs = action_probs[action_probs > 0]
+                action_probs /= np.sum(action_probs)
+
+                action_index = np.random.choice(
+                    len(available_actions), p=action_probs
+                )
+                action = available_actions[action_index]
             else:
                 action = None
             state, player = game.result(state, player, action)
@@ -133,6 +144,8 @@ class Mcts(object):
         while node:
             if winner == node.performer:
                 reward = 1
+            elif winner == node.player:
+                reward = -1
             else:
                 reward = 0
             node.update_domain_theoretic_value(reward)
@@ -142,7 +155,7 @@ class Mcts(object):
     def calculate_uct_value(node, noise, exploration, epsilon):
         Q = node.get_domain_theoretic_value()
         U = exploration * (
-            (1 - epsilon) * node.previous_probabily +
+            (1 - epsilon) * node.policy +
             epsilon * noise
         ) * (
             np.sqrt(node.parent.visit_count) / (1 + node.visit_count)

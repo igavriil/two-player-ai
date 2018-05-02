@@ -48,7 +48,7 @@ class OthelloBoard(object):
 
     @property
     def binary_form(self):
-        return binary_board(self.board)
+        return np.array([binary_board(self.board)])
 
     def __eq__(self, other):
         return boards_equal(self.board, other.board)
@@ -67,7 +67,7 @@ class Othello(Game):
 
     @staticmethod
     def action_size():
-        return othello_constants.BOARD_SIZE * othello_constants.BOARD_SIZE + 1
+        return othello_constants.BOARD_SIZE * othello_constants.BOARD_SIZE
 
     @staticmethod
     def initial_state():
@@ -107,6 +107,31 @@ class Othello(Game):
         else:
             actions = Othello.reverse_actions(board, player, aux, directions)
         return list(zip(*actions))
+
+    @staticmethod
+    def actions_mask(state, player):
+        """
+        All available actions for the Othello game state.
+        Actions are blank squares where the user can place his chips.
+
+        Args:
+            state: An Othello game state
+            player: The player playing
+        Returns:
+            A mask of the board with True filled in valid squares.
+        """
+        board = state.board
+        aux = np.zeros(board.shape, dtype=np.int8)
+        directions = othello_constants.DIRECTIONS
+        if state.count(0) > state.count(player):
+            actions = Othello.forward_actions_mask(
+                board, player, aux, directions
+            )
+        else:
+            actions = Othello.reverse_actions_mask(
+                board, player, aux, directions
+            )
+        return actions
 
     @staticmethod
     def result(state, player, action):
@@ -214,6 +239,27 @@ class Othello(Game):
 
     @staticmethod
     @nb.jit(nopython=True, nogil=True, cache=True)
+    def forward_actions_mask(board, player, actions, directions):
+        size = board[0].size
+        for row, col in zip(*np.where(board == player)):
+            for hdir, vdir in directions:
+                x, y = row + hdir, col + vdir
+                step = 1
+                if 0 <= x < size and 0 <= y < size and board[x, y] == -player:
+                    step += 1
+                    x, y = row + step * hdir, col + step * vdir
+                    while (0 <= x < size and 0 <= y < size and
+                           board[x, y] != player):
+                        if board[x, y] == 0:
+                            actions[x, y] = 1
+                            break
+
+                        step += 1
+                        x, y = row + step * hdir, col + step * vdir
+        return actions
+
+    @staticmethod
+    @nb.jit(nopython=True, nogil=True, cache=True)
     def reverse_actions(board, player, actions, directions):
         size = board[0].size
         for row, col in zip(*np.where(board == 0)):
@@ -231,6 +277,26 @@ class Othello(Game):
                         step += 1
                         x, y = row + step * hdir, col + step * vdir
         return np.where(actions)
+
+    @staticmethod
+    @nb.jit(nopython=True, nogil=True, cache=True)
+    def reverse_actions_mask(board, player, actions, directions):
+        size = board[0].size
+        for row, col in zip(*np.where(board == 0)):
+            for hdir, vdir in directions:
+                x, y = row + hdir, col + vdir
+                step = 1
+                if 0 <= x < size and 0 <= y < size and board[x, y] == -player:
+                    step += 1
+                    x, y = row + step * hdir, col + step * vdir
+                    while 0 <= x < size and 0 <= y < size and board[x, y] != 0:
+                        if board[x, y] == player:
+                            actions[row, col] = 1
+                            break
+
+                        step += 1
+                        x, y = row + step * hdir, col + step * vdir
+        return actions
 
     @staticmethod
     @nb.jit(nopython=True, nogil=True, cache=True)
