@@ -1,17 +1,17 @@
 import numba as nb
 import numpy as np
 
+import two_player_ai.othello.constants as othello_constants
+
 from two_player_ai.game import Game
-from two_player_ai.othello.utils import boards_equal, cannonical_board
+from two_player_ai.othello.utils import (
+    binary_board, boards_equal, cannonical_board
+)
 from two_player_ai.othello.zobrist import Zobrist
 
 
 class OthelloBoard(object):
-    BLACK_PLAYER = 1
-    WHITE_PLAYER = -1
-
     def __init__(self, board=None, uid=None):
-        self.size = 8
         self.board = self.initial_board() if board is None else board
         self.uid = Zobrist.from_state(self) if uid is None else uid
 
@@ -22,12 +22,15 @@ class OthelloBoard(object):
         Returns:
             A np.array(size x size) representing the board
         """
-        board = np.zeros((self.size, self.size), dtype=np.int8)
-        center = int(self.size / 2)
-        board[center - 1][center - 1] = OthelloBoard.BLACK_PLAYER
-        board[center - 1][center] = OthelloBoard.WHITE_PLAYER
-        board[center][center] = OthelloBoard.BLACK_PLAYER
-        board[center][center - 1] = OthelloBoard.WHITE_PLAYER
+        board = np.zeros(
+            (othello_constants.BOARD_SIZE, othello_constants.BOARD_SIZE),
+            dtype=np.int8
+        )
+        center = int(othello_constants.BOARD_SIZE / 2)
+        board[center - 1][center - 1] = othello_constants.BLACK_PLAYER
+        board[center - 1][center] = othello_constants.WHITE_PLAYER
+        board[center][center] = othello_constants.BLACK_PLAYER
+        board[center][center - 1] = othello_constants.WHITE_PLAYER
 
         return board
 
@@ -39,9 +42,13 @@ class OthelloBoard(object):
         Deep clone the Othello state.
 
         Returns:
-            A clone of the current state
+            A clone the current state
         """
         return OthelloBoard(board=np.copy(self.board), uid=self.uid)
+
+    @property
+    def binary_form(self):
+        return binary_board(self.board)
 
     def __eq__(self, other):
         return boards_equal(self.board, other.board)
@@ -54,13 +61,13 @@ class Othello(Game):
     """
     The game of Othello.initial_state
     """
+    @staticmethod
+    def board_size():
+        return othello_constants.BOARD_SIZE, othello_constants.BOARD_SIZE
 
-    """A list of all directions, denoted as (x,y) vector offsets"""
-    DIRECTIONS = [
-        (1, 1), (1, 0), (1, -1),
-        (0, -1), (0, 1),
-        (-1, -1), (-1, 0), (-1, 1)
-    ]
+    @staticmethod
+    def action_size():
+        return othello_constants.BOARD_SIZE * othello_constants.BOARD_SIZE + 1
 
     @staticmethod
     def initial_state():
@@ -71,7 +78,7 @@ class Othello(Game):
                  player playing
 
         """
-        return OthelloBoard(), OthelloBoard.BLACK_PLAYER
+        return OthelloBoard(), othello_constants.BLACK_PLAYER
 
     @staticmethod
     def cannonical_state(state, player):
@@ -94,7 +101,7 @@ class Othello(Game):
         """
         board = state.board
         aux = np.zeros(board.shape, dtype=np.bool)
-        directions = Othello.DIRECTIONS
+        directions = othello_constants.DIRECTIONS
         if state.count(0) > state.count(player):
             actions = Othello.forward_actions(board, player, aux, directions)
         else:
@@ -127,7 +134,7 @@ class Othello(Game):
         if action:
             aux = np.zeros(result_state.board.shape, dtype=np.bool)
 
-            for direction in Othello.DIRECTIONS:
+            for direction in othello_constants.DIRECTIONS:
                 flips = Othello.flips(board, player, aux, action, direction)
                 if flips:
                     for flip in zip(*flips):
@@ -143,15 +150,14 @@ class Othello(Game):
     @staticmethod
     def terminal_test(state, player):
         """
-        Check if the game has ended and if yes determine
-        the outcome of game.
+        Check if the game has ended.
 
         Args:
             state: An Othello game state
         Returns:
             True if game has not ended else False
         """
-        dirs = Othello.DIRECTIONS
+        dirs = othello_constants.DIRECTIONS
 
         if state.count(0) >= state.count(player):
             if not Othello.has_forward_actions(state.board, player, dirs):
@@ -176,12 +182,12 @@ class Othello(Game):
             BLACK_PLAYER if black player wins
             0.5 if tie
         """
-        white = state.count(OthelloBoard.WHITE_PLAYER)
-        black = state.count(OthelloBoard.BLACK_PLAYER)
+        white = state.count(othello_constants.WHITE_PLAYER)
+        black = state.count(othello_constants.BLACK_PLAYER)
         if white > black:
-            return OthelloBoard.WHITE_PLAYER
+            return othello_constants.WHITE_PLAYER
         elif black > white:
-            return OthelloBoard.BLACK_PLAYER
+            return othello_constants.BLACK_PLAYER
         else:
             return 0.5
 

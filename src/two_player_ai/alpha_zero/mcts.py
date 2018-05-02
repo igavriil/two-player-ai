@@ -6,18 +6,23 @@ from two_player_ai.utils import benchmark, cached_property
 
 
 class MctsTreeNode(object):
-    def __init__(self, state, player, parent=None, action=None):
+    def __init__(self, state, player, parent=None, action=None, previous_probabily=0):
         self.state = state
         self.player = player
         self.parent = parent
         self.action = action
         self.visit_count = 0
         self.total_reward = 0.0
+        self.previous_probabily = previous_probabily
         self.child_nodes = []
 
     @cached_property
     def performer(self):
         return self.parent.player if self.parent else None
+
+    @cached_property
+    def is_root(self):
+        return bool(self.parent)
 
     def add_child(self, child):
         self.child_nodes.append(child)
@@ -41,49 +46,9 @@ class Mcts(object):
     @staticmethod
     @benchmark
     def uct(game, state, player, exploration=0.8, iterations=10):
-        root_node = MctsTreeNode(state, player)
+        root_node = MctsTreeNode(state, player, root=True)
 
         return Mcts.uct_node(game, root_node, player, exploration, iterations)
-
-    @staticmethod
-    @benchmark
-    def uct_root(game, state, player, exploration=0.8, iterations=10):
-        processes = multiprocessing.cpu_count()
-        root_node = MctsTreeNode(state, player)
-        iterations = math.ceil(iterations / processes)
-        with multiprocessing.Pool(processes) as pool:
-            results = pool.starmap(
-                Mcts.uct_node,
-                [
-                    (game, root_node, player, exploration, iterations)
-                    for _ in range(processes)
-                ]
-            )
-
-        return Mcts.best_child(results, exploration)
-
-    @staticmethod
-    @benchmark
-    def uct_leaf(game, state, player, exploration=0.8, iterations=10):
-        processes = multiprocessing.cpu_count()
-        root_node = MctsTreeNode(state, player)
-        iterations = math.ceil(iterations / processes)
-        with multiprocessing.Pool(processes) as pool:
-            for i in range(processes):
-                node = Mcts.tree_policy(game, root_node, exploration)
-                results = pool.starmap(
-                    Mcts.simulate,
-                    [
-                        (game, node)
-                        for _ in range(iterations)
-                    ]
-                )
-                for terminal_state, _ in results:
-                    Mcts.backpropagate(game, node, terminal_state)
-
-        best_child = Mcts.uct_select_child(root_node, exploration)
-
-        return best_child
 
     @staticmethod
     def uct_node(game, root_node, player, exploration, iterations):
@@ -96,9 +61,17 @@ class Mcts(object):
         return best_child
 
     @staticmethod
-    def tree_policy(game, node, exploration):
+    def tree_policy(game, node, exploration, dirilecht_alpha=0.8, espilon=0.2):
         while not game.terminal_test(node.state, node.player):
             available_actions = set(game.actions(node.state, node.player))
+            if node.is_root:
+                noise = np.random.dirichlet(
+                    [dirilecht_alpha] * len(available_actions)
+                )
+            else:
+                noise = [0] * len(available_actions)
+                epsilon = 0
+
             if not available_actions:
                 node = Mcts.expand_without_action(node)
                 return node
@@ -106,7 +79,7 @@ class Mcts(object):
                 node = Mcts.expand_with_action(game, node)
                 return node
             else:
-                node = Mcts.uct_select_child(node, exploration)
+                node = Mcts.uct_select_child(node, noise, exploration, epsilon)
         return node
 
     @staticmethod
@@ -125,15 +98,17 @@ class Mcts(object):
         return node
 
     @staticmethod
-    def uct_select_child(node, exploration):
-        return Mcts.best_child(node.child_nodes, exploration)
+    def uct_select_child(node, noise, exploration, epsilon):
+        return Mcts.best_child(node.child_nodes, noise, exploration, epsilon)
 
     @staticmethod
-    def best_child(chidlren, exploration):
+    def best_child(chidlren, noise, exploration, epsilon):
         result = None
         max_uct = -np.inf
-        for child in chidlren:
-            child_uct = Mcts.calculate_uct_value(child, exploration)
+        for child, child_noise in zip(chidlren, noise):
+            child_uct = Mcts.calculate_uct_value(
+                child, child_noise, exploration, epsilon
+            )
             if child_uct > max_uct:
                 max_uct = child_uct
                 result = child
@@ -164,8 +139,12 @@ class Mcts(object):
             node = node.parent
 
     @staticmethod
-    def calculate_uct_value(node, exploration):
-        return node.get_domain_theoretic_value() + \
-               exploration * np.sqrt(
-               np.log(node.parent.visit_count) / node.visit_count
-            )
+    def calculate_uct_value(node, noise, exploration, epsilon):
+        Q = node.get_domain_theoretic_value()
+        U = exploration * (
+            (1 - epsilon) * node.previous_probabily +
+            epsilon * noise
+        ) * (
+            np.sqrt(node.parent.visit_count) / (1 + node.visit_count)
+        )
+        return Q + U
