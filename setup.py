@@ -64,7 +64,9 @@ setup(
         'numpy',
         'numba',
         'tensorflow',
-        'keras'
+        'tensorboard',
+        'keras',
+        'h5py'
     ],
     extras_require={
         # eg:

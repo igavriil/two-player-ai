@@ -1,19 +1,18 @@
-import math
-import multiprocessing
 import numpy as np
 from random import sample
 from two_player_ai.utils import benchmark, cached_property
 
 
 class MctsTreeNode(object):
-    def __init__(self, state, player, parent=None, action=None, policy=0):
+    def __init__(self, state, player, parent=None, action=None, prior_prob=0):
         self.state = state
         self.player = player
         self.parent = parent
         self.action = action
-        self.visit_count = 0
-        self.total_reward = 0.0
-        self.policy = policy
+        self.visit_count = 0  # N(s, a)
+        self.total_reward = 0.0  # W(s, a) total_action_value
+        self.prior_prob = prior_prob  # P(s, a) prior probability
+        self.mean_action_value = 0.0  # Q(s, a)
         self.child_nodes = []
 
     @cached_property
@@ -22,7 +21,7 @@ class MctsTreeNode(object):
 
     @cached_property
     def is_root(self):
-        return bool(self.parent)
+        return not bool(self.parent)
 
     def add_child(self, child):
         self.child_nodes.append(child)
@@ -41,14 +40,19 @@ class MctsTreeNode(object):
     def __hash__(self):
         return self.state.__hash__() ^ self.action.__hash__()
 
+class MctsMemory(object):
+    def __init__(self):
+        self.state_policy = {}
 
 class Mcts(object):
     @staticmethod
     @benchmark
-    def uct(game, state, player, model, exploration=0.8, iterations=10):
+    def uct(memory, game, state, player, model, exploration=0.8, iterations=10):
         root_node = MctsTreeNode(state, player)
 
-        return Mcts.uct_node(game, root_node, player, model, exploration, iterations)
+        return Mcts.uct_node(
+            game, root_node, player, model, exploration, iterations
+        )
 
     @staticmethod
     def uct_node(game, root_node, player, model, exploration, iterations):
@@ -61,12 +65,12 @@ class Mcts(object):
         return best_child
 
     @staticmethod
-    def tree_policy(game, node, exploration, dirilecht_alpha=0.8, espilon=0.2):
+    def tree_policy(game, node, exploration, dirichlet_alpha=0.8, epsilon=0.2):
         while not game.terminal_test(node.state, node.player):
             available_actions = set(game.actions(node.state, node.player))
             if node.is_root:
                 noise = np.random.dirichlet(
-                    [dirilecht_alpha] * len(available_actions)
+                    [dirichlet_alpha] * len(available_actions)
                 )
             else:
                 noise = [0] * len(available_actions)
@@ -124,7 +128,7 @@ class Mcts(object):
             if available_actions:
                 available_actions_mask = game.actions_mask(state, player)
                 policy, _ = model.predict(state.binary_form)
-                policy_probs = policy[0].reshape(available_actions_mask.shape)
+                policy_probs = policy[0]
                 action_probs = available_actions_mask * policy_probs
                 action_probs = action_probs[action_probs > 0]
                 action_probs /= np.sum(action_probs)

@@ -121,7 +121,7 @@ class Othello(Game):
             A mask of the board with True filled in valid squares.
         """
         board = state.board
-        aux = np.zeros(board.shape, dtype=np.int8)
+        aux = np.zeros(board.shape[0] * board.shape[1], dtype=np.int8)
         directions = othello_constants.DIRECTIONS
         if state.count(0) > state.count(player):
             actions = Othello.forward_actions_mask(
@@ -251,7 +251,7 @@ class Othello(Game):
                     while (0 <= x < size and 0 <= y < size and
                            board[x, y] != player):
                         if board[x, y] == 0:
-                            actions[x, y] = 1
+                            actions[x + size * y] = 1
                             break
 
                         step += 1
@@ -291,7 +291,7 @@ class Othello(Game):
                     x, y = row + step * hdir, col + step * vdir
                     while 0 <= x < size and 0 <= y < size and board[x, y] != 0:
                         if board[x, y] == player:
-                            actions[row, col] = 1
+                            actions[row + size * col] = 1
                             break
 
                         step += 1

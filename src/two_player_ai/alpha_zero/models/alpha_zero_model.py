@@ -1,5 +1,3 @@
-import two_player_ai.othello.constants as othello_constants
-
 from two_player_ai.alpha_zero.base.base_model import BaseModel
 from keras.models import Model
 from keras.layers import (
@@ -16,7 +14,7 @@ class AlphaZeroModel(BaseModel):
         self.game = game
         self.build_model()
 
-    def build_residual_layer(self, x, index):
+    def build_residual_layer(self, x):
         in_x = x
 
         x = Conv2D(
@@ -24,141 +22,91 @@ class AlphaZeroModel(BaseModel):
             kernel_size=self.config["cnn_filter_size"],
             padding="same",
             data_format="channels_first",
-            use_bias=False,
-            kernel_regularizer=l2(self.config["l2_reg"]),
-            name="residual_conv_1-{index}-{filter_size}-{kernel_size}".format(
-                index=index,
-                filter_size=self.config["cnn_first_filter_size"],
-                kernel_size=self.config["cnn_filter_num"]
-            )
+            kernel_regularizer=l2(self.config["l2_reg"])
         )(x)
 
-        x = BatchNormalization(
-            axis=1,
-            name="residual_batch_normalization_1-{index}".format(
-                index=index
-            )
-        )(x)
-
-        x = Activation(
-            "relu",
-            name="residual_activation_1-{index}".format(
-                index=index
-            )
-        )(x)
+        x = BatchNormalization(axis=1)(x)
+        x = Activation("relu")(x)
 
         x = Conv2D(
             filters=self.config["cnn_filter_num"],
             kernel_size=self.config["cnn_filter_size"],
             padding="same",
             data_format="channels_first",
-            use_bias=False,
-            kernel_regularizer=l2(self.config["l2_reg"]),
-            name="residual_conv_2-{index}-{filter_size}-{kernel_size}".format(
-                index=index,
-                filter_size=self.config["cnn_first_filter_size"],
-                kernel_size=self.config["cnn_filter_num"]
-            )
+            kernel_regularizer=l2(self.config["l2_reg"])
         )(x)
+        x = BatchNormalization(axis=1)(x)
 
-        x = BatchNormalization(
-            axis=1,
-            name="residual_batch_normalization_2-{index}".format(
-                index=index
-            )
-        )(x)
-
-        x = Add(
-            name="residual_add-{index}".format(
-                index=index
-            )
-        )([in_x, x])
-
-        x = Activation(
-            "relu",
-            name="residual_activation_2-{index}".format(
-                index=index
-            )
-        )(x)
+        x = Add()([in_x, x])
+        x = Activation("relu")(x)
         return x
 
     def build_model(self):
-        input_layer = x = Input(
-            shape=othello_constants.BINARY_SHAPE,
-            name='input_layer'
-        )
+        in_x = x = Input((2, 8, 8))
 
         x = Conv2D(
             filters=self.config["cnn_filter_num"],
-            kernel_size=self.config["cnn_first_filter_size"],
+            kernel_size=self.config["cnn_filter_size"],
             data_format="channels_first",
-            use_bias=False,
+            padding="same",
             kernel_regularizer=l2(self.config["l2_reg"]),
-            name="input_conv-{filter_size}-{kernel_size}".format(
-                filter_size=self.config["cnn_first_filter_size"],
-                kernel_size=self.config["cnn_filter_num"]
-            )
         )(x)
 
-        x = BatchNormalization(axis=1, name="input_batch_normalization")(x)
-        x = Activation("relu", name="input_relu")(x)
+        x = BatchNormalization(axis=1)(x)
+        x = Activation("relu")(x)
 
-        for index in range(self.config["residual_layer_num"]):
-            x = self.build_residual_layer(x, index)
+        for _ in range(self.config["res_layer_num"]):
+            x = self.build_residual_layer(x)
 
-        out_layer = x
+        res_out = x
 
-        p = Conv2D(
+        x = Conv2D(
             filters=2,
             kernel_size=1,
-            padding="same",
             data_format="channels_first",
-            use_bias=False,
+            padding="valid",
             kernel_regularizer=l2(self.config["l2_reg"]),
-            name="policy_network-1-2"
-        )(out_layer)
+        )(res_out)
 
-        p = BatchNormalization(axis=1, name="policy_batch_normalization")(p)
-        p = Activation("relu", name="policy_relu")(p)
-        p = Flatten(name="policy_flatten")(p)
+        x = BatchNormalization(axis=1)(x)
+        x = Activation("relu")(x)
+        x = Flatten()(x)
 
         policy_network = Dense(
-            self.game.action_size(),
+            8 * 8,
             kernel_regularizer=l2(self.config["l2_reg"]),
             activation="softmax",
             name="policy_out"
-        )(p)
+        )(x)
 
-        v = Conv2D(
-            filters=4,
+        x = Conv2D(
+            filters=1,
             kernel_size=1,
-            padding="same",
+            padding="valid",
             data_format="channels_first",
-            use_bias=False,
             kernel_regularizer=l2(self.config["l2_reg"]),
-            name="value_network-1-4"
-        )(out_layer)
+        )(res_out)
 
-        v = BatchNormalization(axis=1, name="value_batch_normalization")(v)
-        v = Activation("relu", name="value_relu")(v)
-        v = Flatten(name="value_flatten")(v)
-        v = Dense(
-            self.game.action_size(),
+        x = BatchNormalization(axis=1)(x)
+        x = Activation("relu")(x)
+        x = Flatten()(x)
+        x = Dense(
+            self.config["value_fc_size"],
             kernel_regularizer=l2(self.config["l2_reg"]),
-            activation="relu",
-            name="value_dense"
-        )(v)
+            activation="relu"
+        )(x)
 
         value_network = Dense(
             1,
             kernel_regularizer=l2(self.config["l2_reg"]),
             activation="tanh",
             name="value_out"
-        )(v)
+        )(x)
 
         self.model = Model(
-            inputs=input_layer,
-            outputs=[policy_network, value_network]
+            inputs=in_x,
+            outputs=[policy_network, value_network],
+            name="reversi_model"
         )
 
         self.model.compile(
