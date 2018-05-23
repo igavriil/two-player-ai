@@ -70,6 +70,10 @@ class Othello(Game):
         return othello_constants.BOARD_SIZE * othello_constants.BOARD_SIZE
 
     @staticmethod
+    def all_actions():
+        return othello_constants.ALL_ACTIONS
+
+    @staticmethod
     def initial_state():
         """
         The initial state of the game.
@@ -214,7 +218,7 @@ class Othello(Game):
         elif black > white:
             return othello_constants.BLACK_PLAYER
         else:
-            return 0.5
+            return 0
 
     @staticmethod
     @nb.jit(nopython=True, nogil=True, cache=True)
@@ -251,7 +255,7 @@ class Othello(Game):
                     while (0 <= x < size and 0 <= y < size and
                            board[x, y] != player):
                         if board[x, y] == 0:
-                            actions[x + size * y] = 1
+                            actions[x * size + y] = 1
                             break
 
                         step += 1
@@ -291,7 +295,7 @@ class Othello(Game):
                     x, y = row + step * hdir, col + step * vdir
                     while 0 <= x < size and 0 <= y < size and board[x, y] != 0:
                         if board[x, y] == player:
-                            actions[row + size * col] = 1
+                            actions[row * size + col] = 1
                             break
 
                         step += 1
