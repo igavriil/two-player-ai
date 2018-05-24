@@ -6,7 +6,7 @@ from two_player_ai.utils import benchmark, cached_property
 
 
 class MctsTreeNode(object):
-    def __init__(self, state, player, parent=None, action=None, prior_prob=0.0):
+    def __init__(self, state, player, parent=None, action=None, prob=0.0):
         self.state = state
         self.player = player
         self.parent = parent
@@ -14,7 +14,7 @@ class MctsTreeNode(object):
         self.visit_count = 0
         self.total_reward = 0.0
         self.child_nodes = []
-        self.prior_prob = prior_prob
+        self.prob = prob
 
     @cached_property
     def performer(self):
@@ -79,8 +79,8 @@ class Mcts(object):
                         for _ in range(iterations)
                     ]
                 )
-                for terminal_state, _ in results:
-                    Mcts.backpropagate(game, node, terminal_state)
+                for reward in results:
+                    Mcts.backpropagate(game, node, reward)
 
         best_child = Mcts.uct_select_child(root_node, 0)
 
@@ -90,8 +90,8 @@ class Mcts(object):
     def uct_node(game, root_node, player, c_puct, iterations):
         for i in range(iterations):
             node = Mcts.tree_policy(game, root_node, c_puct)
-            terminal_state, last_player = Mcts.simulate(game, node)
-            Mcts.backpropagate(game, node, terminal_state)
+            reward = Mcts.simulate(game, node)
+            Mcts.backpropagate(game, node, reward)
         best_child = Mcts.uct_select_child(root_node, 0)
 
         return best_child
@@ -119,7 +119,7 @@ class Mcts(object):
         state, player = game.result(node.state, node.player, action)
         child = MctsTreeNode(
             state, player, parent=node, action=action,
-            prior_prob=(1/len(available_actions))
+            prob=(1/len(available_actions))
         )
         return node.add_child(child)
 
@@ -156,20 +156,28 @@ class Mcts(object):
             else:
                 action = None
             state, player = game.result(state, player, action)
-        return state, player
+
+        winning_player = game.winner(state)
+
+        return Mcts.reward(winning_player)
 
     @staticmethod
-    def backpropagate(game, node, terminal_state):
-        winner = game.winner(terminal_state)
+    def backpropagate(game, node, reward):
         while node:
-            if winner == node.performer:
-                reward = 1
-            elif winner == node.player:
-                reward = -1
-            else:
-                reward = 0
             node.update_domain_theoretic_value(reward)
             node = node.parent
+            reward = -reward
+
+    @staticmethod
+    def reward(node, winning_player):
+        if winning_player == node.performer:
+            reward = 1
+        elif winning_player == node.player:
+            reward = -1
+        else:
+            reward = 0
+
+        return reward
 
     @staticmethod
     def calculate_uct_value(node, c_puct):
