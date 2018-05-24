@@ -4,14 +4,8 @@ from two_player_ai.utils import benchmark, cached_property
 from two_player_ai.alpha_zero.utils.utils import normalize, reshape
 
 
-class MctsAggregation(object):
-    def __init__(self):
-        self.Ns = {}
-        self.Ps = {}
-
-
 class MctsTreeNode(object):
-    def __init__(self, state, player, parent=None, action=None, prob=None):
+    def __init__(self, state, player, parent=None, action=None, prob=0.0):
         self.state = state
         self.player = player
         self.parent = parent
@@ -50,6 +44,7 @@ class MctsTreeNode(object):
     def __hash__(self):
         return self.state.__hash__() ^ self.action.__hash__()
 
+
 class Mcts(object):
     @staticmethod
     def search(game, state, player, model):
@@ -60,7 +55,6 @@ class Mcts(object):
 
         if game.terminal_test(cannonical_state, player):
             return -game.winner(cannonical_state)
-
 
     @staticmethod
     @benchmark
@@ -85,27 +79,29 @@ class Mcts(object):
     def tree_policy(game, node, model, c_puct, dirichlet_alpha=0.03, epsilon=0.25):
         while not game.terminal_test(node.state, node.player):
             available_actions = set(game.actions(node.state, node.player))
-            # if node.is_root:
-            #     noise = np.random.dirichlet(
-            #         [dirichlet_alpha] * len(available_actions)
-            #     )
-            # else:
-            #     noise = [0] * len(available_actions)
-            #     epsilon = 0
 
             if not available_actions:
                 node = Mcts.expand_without_action(node)
                 return node
             elif not len(node.child_nodes) == len(available_actions):
-                node.children_probabilities = (
-                    node.children_probabilities or
-                    Mcts.children_probabilities(game, node, model)
-                )
+                if not node.child_nodes:
+                    node.children_probabilities = Mcts.children_probabilities(
+                        game, node, model
+                    )
+
                 node = Mcts.expand_with_action(game, node)
                 return node
             else:
+                if node.is_root:
+                    noise = np.random.dirichlet(
+                        [dirichlet_alpha] * len(node.child_nodes)
+                    )
+                else:
+                    noise = [0] * len(node.child_nodes)
+                    epsilon = 0
+
                 node = Mcts.uct_select_child(
-                    node, c_puct, dirichlet_alpha, epsilon
+                    node, c_puct, noise, epsilon
                 )
         return node
 
@@ -135,18 +131,11 @@ class Mcts(object):
         available_actions = set(game.actions(node.state, node.player))
         explored_actions = set([child.action for child in node.child_nodes])
 
-        if not node.policy:
-            policy, value = model.predict(node.state.binary_form)
-            action_probs = [
-                ((x, y), policy[0][x * 8 + y])
-                for (x, y) in game.actions(node.state, node.player)
-            ]
-            node.action_probs = action_probs
-
         action = sample(available_actions - explored_actions, 1)[0]
         state, player = game.result(node.state, node.player, action)
         child = MctsTreeNode(
-            state, player, parent=node, action=action, prob=node.action_probs[action]
+            state, player, parent=node, action=action,
+            prob=node.child_probs[action]
         )
         return node.add_child(child)
 
@@ -156,7 +145,7 @@ class Mcts(object):
         return node
 
     @staticmethod
-    def uct_select_child(node, c_puct, dirichlet_alpha, epsilon):
+    def uct_select_child(node, c_puct, noise, epsilon):
         result = None
         max_uct = -np.inf
         for child, child_noise in zip(node.child_nodes, noise):
