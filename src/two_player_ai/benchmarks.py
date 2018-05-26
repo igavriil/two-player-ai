@@ -22,7 +22,7 @@ def heuristic(state, player):
     h7 = Stability.evaluate(s)
     return h1 + h2 + h3 + h4 + h5 + h6 + h7
 
-state, player = Othello.initial_state()
+    state, player = Othello.initial_state()
 mcts = Mcts(Othello)
 Mcts.uct(state, player)
 ab = AlphaBeta(Othello, heuristic)
@@ -81,3 +81,29 @@ def sequential(num):
         )
 
     print(simulation_results)
+
+import json
+from two_player_ai.alpha_zero.models.alpha_zero_model import AlphaZeroModel
+from two_player_ai.alpha_zero.mcts import Mcts
+from two_player_ai.othello.game import Othello
+
+
+state, player = Othello.initial_state()
+config_file = "./src/two_player_ai/alpha_zero/configs/alpha_zero_config.json"
+with open(config_file, 'r') as config:
+    config_dict = json.load(config)
+
+model = AlphaZeroModel(Othello, config_dict).model
+r = Mcts.uct(Othello, state, player, model, c_puct=0.8, iterations=10)
+
+
+from collections import defaultdict
+h = defaultdict(int)
+
+def traverse(node):
+    h[node.state] += 1
+    for n in node.child_nodes:
+        traverse(n)
+    if len(node.child_nodes) == 0:
+        print(node.state.board)
+    return h
