@@ -8,7 +8,22 @@ from two_player_ai.utils import benchmark, cached_property
 from functools import partial
 from two_player_ai.alpha_beta import AlphaBeta
 from two_player_ai.othello.heuristics import Weighted, PiecesCount, CornerPieces, EdgePieces, CornerEdgePieces, Mobility, Stability
-from two_player_ai.othello.utils import cannonical_board
+from two_player_ai.othello.utils import cannonic
+
+import numba as nb
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def foo(array):
+    array.reshape((8,8))
+def choose_next_action(node):
+    available_actions = game.actions(node.state, node.player)
+    action_probabilities = [
+        Mcts.get_policy(Othello, r)[a] for a in available_actions
+    ]
+    action_index = np.random.choice(
+        len(available_actions), p=action_probabilities
+    )
+    action = available_actions[action_index]
 
 
 def heuristic(state, player):
@@ -84,7 +99,8 @@ def sequential(num):
 
 import json
 from two_player_ai.alpha_zero.models.alpha_zero_model import AlphaZeroModel
-from two_player_ai.alpha_zero.mcts import Mcts
+from two_player_ai.alpha_zero.data_loaders.alpha_zero_data_loader import AlphaZeroDataLoader
+
 from two_player_ai.othello.game import Othello
 
 
@@ -94,6 +110,13 @@ with open(config_file, 'r') as config:
     config_dict = json.load(config)
 
 model = AlphaZeroModel(Othello, config_dict).model
+
+dl = AlphaZeroDataLoader(None, Othello, model)
+dl.execute_episode()
+
+
+
+
 r = Mcts.uct(Othello, state, player, model, c_puct=0.8, iterations=10)
 
 
@@ -107,3 +130,26 @@ def traverse(node):
     if len(node.child_nodes) == 0:
         print(node.state.board)
     return h
+
+
+
+
+
+import json
+from two_player_ai.alpha_zero.models.alpha_zero_model import AlphaZeroModel
+from two_player_ai.alpha_zero.data_loaders.alpha_zero_data_loader import AlphaZeroDataLoader
+from two_player_ai.alpha_zero.trainers.alpha_zero_trainer import AlphaZeroModelTrainer
+
+from two_player_ai.othello.game import Othello
+
+
+state, player = Othello.initial_state()
+config_file = "./src/two_player_ai/alpha_zero/configs/alpha_zero_config.json"
+with open(config_file, 'r') as config:
+    config_dict = json.load(config)
+
+model = AlphaZeroModel(Othello, config_dict).model
+
+dl = AlphaZeroDataLoader(Othello, model, 1)
+
+t = AlphaZeroModelTrainer(model, dl.get_train_data(), dl.get_test_data(), 1)

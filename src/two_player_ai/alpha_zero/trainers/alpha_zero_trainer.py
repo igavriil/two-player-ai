@@ -1,12 +1,13 @@
 import os
+import time
 
 from two_player_ai.alpha_zero.base.base_trainer import BaseTrainer
 from keras.callbacks import ModelCheckpoint, TensorBoard
 
 
-class MnistModelTrainer(BaseTrainer):
+class AlphaZeroModelTrainer(BaseTrainer):
     def __init__(self, model, data, test_data, config):
-        super(MnistModelTrainer, self).__init__(model, data, test_data, config)
+        super(AlphaZeroModelTrainer, self).__init__(model, data, test_data, config)
         self.callbacks = []
         self.loss = []
         self.acc = []
@@ -15,25 +16,40 @@ class MnistModelTrainer(BaseTrainer):
         self.init_callbacks()
 
     def init_callbacks(self):
+
+        checkpoint_dir = os.path.join(
+            "experiments",
+            time.strftime("%Y-%m-%d/", time.localtime()),
+            "alpha_zero",
+            "checkpoints/"
+        )
+
+        tensorboard_log_dir = os.path.join(
+            "experiments",
+            time.strftime("%Y-%m-%d/", time.localtime()),
+            "alpha_zero",
+            "logs/"
+        )
+
         self.callbacks.append(
             ModelCheckpoint(
                 filepath=os.path.join(
-                    self.config["checkpoint_dir"],
+                    checkpoint_dir,
                     '%s-{epoch:02d}-{val_loss:.2f}.hdf5' %
-                    self.config["exp_name"]
+                    "alpha_zero"
                 ),
-                monitor=self.config["checkpoint_monitor"],
-                mode=self.config["checkpoint_mode"],
-                save_best_only=self.config["checkpoint_save_best_only"],
-                save_weights_only=self.config["checkpoint_save_weights_only"],
-                verbose=self.config["checkpoint_verbose"],
+                monitor="val_loss",
+                mode="min",
+                save_best_only=True,
+                save_weights_only=True,
+                verbose=True,
             )
         )
 
         self.callbacks.append(
                 TensorBoard(
-                    log_dir=self.config["tensorboard_log_dir"],
-                    write_graph=self.config["tensorboard_write_graph"],
+                    log_dir=tensorboard_log_dir,
+                    write_graph=True,
                 )
             )
 
@@ -41,13 +57,11 @@ class MnistModelTrainer(BaseTrainer):
         history = self.model.fit(
             x=self.data[0],
             y=self.data[1],
-            epochs=self.config["num_epochs"],
-            verbose=self.config["verbose_training"],
-            batch_size=self.config["batch_size"],
-            validation_split=self.config["validation_split"],
+            epochs=25,
+            verbose=True,
+            batch_size=256,
+            validation_split=0.20,
             callbacks=self.callbacks,
         )
         self.loss.extend(history.history['loss'])
-        self.acc.extend(history.history['acc'])
         self.val_loss.extend(history.history['val_loss'])
-        self.val_acc.extend(history.history['val_acc'])

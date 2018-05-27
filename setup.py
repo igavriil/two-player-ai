@@ -66,7 +66,8 @@ setup(
         'tensorflow',
         'tensorboard',
         'keras',
-        'h5py'
+        'h5py',
+        'tqdm',
     ],
     extras_require={
         # eg:

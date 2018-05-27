@@ -46,9 +46,11 @@ class OthelloBoard(object):
         """
         return OthelloBoard(board=np.copy(self.board), uid=self.uid)
 
-    @property
-    def binary_form(self):
-        return np.array([binary_board(self.board)])
+    def binary_form(self, wrap=True):
+        if wrap:
+            return np.array([np.array([self.board])])
+        else:
+            return np.array([self.board])
 
     def __eq__(self, other):
         return boards_equal(self.board, other.board)
@@ -61,6 +63,24 @@ class Othello(Game):
     """
     The game of Othello.initial_state
     """
+    @staticmethod
+    def symmetries(state, policy):
+        board = state.board
+        symmetries = []
+
+        for rotation in range(1, 5):
+            for flip in [True, False]:
+                symmetric_board = np.rot90(board, rotation)
+                symmetric_state = OthelloBoard(board=symmetric_board)
+                symmetric_policy = np.rot90(policy, rotation)
+                if flip:
+                    symmetric_board = np.fliplr(symmetric_board)
+                    symmetric_state = OthelloBoard(board=symmetric_board)
+                    symmetric_policy = np.fliplr(symmetric_policy)
+
+                symmetries.append((symmetric_state, symmetric_policy))
+        return symmetries
+
     @staticmethod
     def board_size():
         return othello_constants.BOARD_SIZE, othello_constants.BOARD_SIZE

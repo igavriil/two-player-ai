@@ -4,7 +4,8 @@
   "adam_beta_2": 0.999,
   "cnn_filter_size": 3,
   "cnn_filter_num": 256,
-  "res_layer_num": 10,
+  "res_layer_num": 3,
   "value_fc_size": 256,
-  "l2_reg": 0.001
+  "l2_reg": 0.001,
+  "dropout": 0.3
 }

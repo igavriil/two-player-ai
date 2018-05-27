@@ -4,17 +4,24 @@ from two_player_ai.utils import benchmark, cached_property
 from two_player_ai.alpha_zero.utils.utils import normalize, reshape
 
 
+class ModelMemory(object):
+    def __init__(self):
+        self.node_child_probs = {}
+        self.node_values = {}
+
+
 class MctsTreeNode(object):
     def __init__(self, state, player, parent=None, action=None, prob=0.0):
         self.state = state
         self.player = player
         self.parent = parent
         self.action = action
-        self.visit_count = 0  # N(s, a)
-        self.total_reward = 0.0  # W(s, a) total_action_value
-        self.prob = prob  # P(s, a) prior probability
+        self.visit_count = 0
+        self.total_reward = 0.0
+        self.prob = prob
         self.child_probs = {}
-        self.child_nodes = []
+        self.child_nodes = {}
+        self.value = 0
 
     @cached_property
     def performer(self):
@@ -25,16 +32,22 @@ class MctsTreeNode(object):
         return not bool(self.parent)
 
     def add_child(self, child):
-        self.child_nodes.append(child)
+        if child:
+            self.child_nodes[child.action] = child
+        else:
+            child = MctsTreeNode(
+                self.state, -self.player, parent=self, prob=1
+            )
+            self.child_nodes[None] = child
         return child
 
-    def get_domain_theoretic_value(self):  # Q(s,a)
+    def get_domain_theoretic_value(self):
         return self.total_reward
 
     def update_domain_theoretic_value(self, reward):
         self.total_reward = (
-            self.visit_count * self.total_reward /
-            self.visit_count + 1
+            (self.visit_count * self.total_reward + reward) /
+            (self.visit_count + 1)
         )
         self.visit_count += 1
 
@@ -47,31 +60,27 @@ class MctsTreeNode(object):
 
 class Mcts(object):
     @staticmethod
-    def search(game, state, player, model):
-        cannonical_state = game.cannonical_state(state, player)
-        player *= player
-
-        root_node = MctsTreeNode(cannonical_state, player)
-
-        if game.terminal_test(cannonical_state, player):
-            return -game.winner(cannonical_state)
-
-    @staticmethod
-    @benchmark
-    def uct(memory, game, state, player, model, c_puct=0.8, iterations=10):
+    def uct(game, state, player, model, c_puct=0.8, iterations=10):
         root_node = MctsTreeNode(state, player)
 
-        return Mcts.uct_node(
-            game, root_node, player, model, c_puct, iterations
+        return root_node, Mcts.uct_node(
+            game, root_node, model, c_puct, iterations
         )
 
     @staticmethod
     def uct_node(game, root_node, model, c_puct, iterations):
         for i in range(iterations):
-            node = Mcts.tree_policy(game, root_node, c_puct)
+            node = Mcts.tree_policy(game, root_node, model, c_puct)
             value = Mcts.simulate(game, node, model)
             Mcts.backpropagate(game, node, value)
-        best_child = Mcts.uct_select_child(root_node, None, c_puct, 0)
+
+        c_puct = 0
+        noise = [0] * len(root_node.child_nodes)
+        epsilon = 0
+
+        best_child = Mcts.uct_select_child(
+            root_node, c_puct, noise, epsilon
+        )
 
         return best_child
 
@@ -84,10 +93,9 @@ class Mcts(object):
                 node = Mcts.expand_without_action(node)
                 return node
             elif not len(node.child_nodes) == len(available_actions):
-                if not node.child_nodes:
-                    node.children_probabilities = Mcts.children_probabilities(
-                        game, node, model
-                    )
+                node.child_probs = node.child_probs or Mcts.children_probs(
+                    game, node, model
+                )
 
                 node = Mcts.expand_with_action(game, node)
                 return node
@@ -106,9 +114,9 @@ class Mcts(object):
         return node
 
     @staticmethod
-    def children_probabilities(game, node, model):
+    def children_probs(game, node, model):
         available_actions = game.actions(node.state, node.player)
-        policy, value = model.predict(node.state.binary_form)
+        policy, value = model.predict(node.state.binary_form())
 
         policy = reshape(policy[0], game.board_size())
         value = value[0]
@@ -127,9 +135,9 @@ class Mcts(object):
         return child_probs
 
     @staticmethod
-    def expand_with_action(game, node, model):
+    def expand_with_action(game, node):
         available_actions = set(game.actions(node.state, node.player))
-        explored_actions = set([child.action for child in node.child_nodes])
+        explored_actions = set(node.child_nodes.keys())
 
         action = sample(available_actions - explored_actions, 1)[0]
         state, player = game.result(node.state, node.player, action)
@@ -148,7 +156,7 @@ class Mcts(object):
     def uct_select_child(node, c_puct, noise, epsilon):
         result = None
         max_uct = -np.inf
-        for child, child_noise in zip(node.child_nodes, noise):
+        for child, child_noise in zip(node.child_nodes.values(), noise):
             child_uct = Mcts.calculate_uct_value(
                 child, c_puct, child_noise, epsilon
             )
@@ -163,10 +171,13 @@ class Mcts(object):
         state, player = node.state, node.player
 
         if game.terminal_test(state, player):
-            return game.winner(state) * player
+            value = game.winner(state) * player
         else:
-            _, value = model.predict(state.binary_form)
-            return value
+            _, value = model.predict(state.binary_form())
+            value = value[0][0]
+
+        node.value = value
+        return value
 
     @staticmethod
     def backpropagate(game, node, value):
@@ -176,10 +187,22 @@ class Mcts(object):
             node = node.parent
 
     @staticmethod
+    def get_policy(game, node):
+        available_actions = game.actions(node.state, node.player)
+
+        policy = np.zeros(game.board_size())
+        for row, col in available_actions:
+            child_node = node.child_nodes.get((row, col))
+            if child_node:
+                policy[row, col] = child_node.visit_count
+
+        return normalize(policy)
+
+    @staticmethod
     def calculate_uct_value(node, c_puct, noise, epsilon=0.25):
         Q = node.get_domain_theoretic_value()
         U = c_puct * (
-            (1 - epsilon) * node.prior_prob +
+            (1 - epsilon) * node.prob +
             epsilon * noise
         ) * (
             np.sqrt(node.parent.visit_count) / (1 + node.visit_count)

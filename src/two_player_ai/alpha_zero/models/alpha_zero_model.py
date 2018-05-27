@@ -1,7 +1,7 @@
 from two_player_ai.alpha_zero.base.base_model import BaseModel
 from keras.models import Model
 from keras.layers import (
-    Activation, BatchNormalization, Conv2D, Dense, Flatten, Input,
+    Activation, BatchNormalization, Conv2D, Dense, Flatten, Input, Dropout
 )
 from keras.optimizers import Adam
 from keras.regularizers import l2
@@ -42,7 +42,7 @@ class AlphaZeroModel(BaseModel):
         return x
 
     def build_model(self):
-        in_x = x = Input((2, 8, 8))
+        in_x = x = Input((1, 8, 8))
 
         x = Conv2D(
             filters=self.config["cnn_filter_num"],
@@ -70,6 +70,8 @@ class AlphaZeroModel(BaseModel):
 
         x = BatchNormalization(axis=1)(x)
         x = Activation("relu")(x)
+        x = Dropout(self.config["dropout"])(x)
+
         x = Flatten()(x)
 
         policy_network = Dense(
@@ -89,6 +91,8 @@ class AlphaZeroModel(BaseModel):
 
         x = BatchNormalization(axis=1)(x)
         x = Activation("relu")(x)
+        x = Dropout(self.config["dropout"])(x)
+
         x = Flatten()(x)
         x = Dense(
             self.config["value_fc_size"],
