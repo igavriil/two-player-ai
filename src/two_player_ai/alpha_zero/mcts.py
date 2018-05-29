@@ -21,7 +21,7 @@ class MctsTreeNode(object):
         self.prob = prob
         self.child_probs = {}
         self.child_nodes = {}
-        self.value = 0
+        self.value = None
 
     @cached_property
     def performer(self):
@@ -60,15 +60,7 @@ class MctsTreeNode(object):
 
 class Mcts(object):
     @staticmethod
-    def uct(game, state, player, model, c_puct=0.8, iterations=10):
-        root_node = MctsTreeNode(state, player)
-
-        return root_node, Mcts.uct_node(
-            game, root_node, model, c_puct, iterations
-        )
-
-    @staticmethod
-    def uct_node(game, root_node, model, c_puct, iterations):
+    def uct_node(game, root_node, model, c_puct=None, iterations=None):
         for i in range(iterations):
             node = Mcts.tree_policy(game, root_node, model, c_puct)
             value = Mcts.simulate(game, node, model)
@@ -82,7 +74,7 @@ class Mcts(object):
             root_node, c_puct, noise, epsilon
         )
 
-        return best_child
+        return root_node, best_child
 
     @staticmethod
     def tree_policy(game, node, model, c_puct, dirichlet_alpha=0.03, epsilon=0.25):
@@ -170,7 +162,9 @@ class Mcts(object):
     def simulate(game, node, model):
         state, player = node.state, node.player
 
-        if game.terminal_test(state, player):
+        if node.value is not None:
+            value = node.value
+        elif game.terminal_test(state, player):
             value = game.winner(state) * player
         else:
             _, value = model.predict(state.binary_form())
@@ -190,13 +184,16 @@ class Mcts(object):
     def get_policy(game, node):
         available_actions = game.actions(node.state, node.player)
 
-        policy = np.zeros(game.board_size())
-        for row, col in available_actions:
-            child_node = node.child_nodes.get((row, col))
-            if child_node:
-                policy[row, col] = child_node.visit_count
+        if available_actions:
+            policy = np.zeros(game.board_size())
+            for row, col in available_actions:
+                child_node = node.child_nodes.get((row, col))
+                if child_node:
+                    policy[row, col] = child_node.visit_count
 
-        return normalize(policy)
+            return normalize(policy)
+        else:
+            return None
 
     @staticmethod
     def calculate_uct_value(node, c_puct, noise, epsilon=0.25):

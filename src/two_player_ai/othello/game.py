@@ -238,7 +238,7 @@ class Othello(Game):
         elif black > white:
             return othello_constants.BLACK_PLAYER
         else:
-            return 0
+            return 0.4
 
     @staticmethod
     @nb.jit(nopython=True, nogil=True, cache=True)

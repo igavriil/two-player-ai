@@ -60,7 +60,7 @@ class AlphaZeroModelTrainer(BaseTrainer):
             epochs=25,
             verbose=True,
             batch_size=256,
-            validation_split=0.20,
+            validation_split=0.15,
             callbacks=self.callbacks,
         )
         self.loss.extend(history.history['loss'])
