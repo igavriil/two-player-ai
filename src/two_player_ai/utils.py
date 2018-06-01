@@ -1,33 +1,42 @@
+import numba as nb
+import numpy as np
 import time
 
 
-def multi(method, args):
-    return method(*args)
+@nb.jit(nopython=True, nogil=True, cache=True)
+def normalize(array, tau=1):
+    if np.any(array):
+        if tau == 1:
+            array = array / np.sum(array)
+        else:
+            tau_array = np.power(array, tau)
+            array = tau_array / np.sum(tau_array)
+
+    return array
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def flatten(array):
+    return array.flatten()
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def reshape(array, dims):
+    return array.reshape(dims)
 
 
 class cached_property(object):
-    """
-    Descriptor (non-data) for building an attribute on-demand on first use.
-    """
     def __init__(self, factory):
-        """
-        <factory> is called such: factory(instance) to build the attribute.
-        """
         self._attr_name = factory.__name__
         self._factory = factory
 
     def __get__(self, instance, owner):
-        # Build the attribute.
         attr = self._factory(instance)
-
-        # Cache the value; hide ourselves.
         setattr(instance, self._attr_name, attr)
-
         return attr
 
 
 def benchmark(method):
-
     def timed(*args, **kw):
         ts = time.time()
         result = method(*args, **kw)

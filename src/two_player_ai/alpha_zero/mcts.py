@@ -1,13 +1,7 @@
 import numpy as np
 from random import sample
-from two_player_ai.utils import benchmark, cached_property
-from two_player_ai.alpha_zero.utils.utils import normalize, reshape
-
-
-class ModelMemory(object):
-    def __init__(self):
-        self.node_child_probs = {}
-        self.node_values = {}
+from two_player_ai.utils import cached_property
+from two_player_ai.utils import normalize, reshape
 
 
 class MctsTreeNode(object):
@@ -193,7 +187,7 @@ class Mcts(object):
 
             return normalize(policy)
         else:
-            return None
+            return np.zeros(game.board_size())
 
     @staticmethod
     def calculate_uct_value(node, c_puct, noise, epsilon=0.25):

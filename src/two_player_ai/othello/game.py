@@ -5,15 +5,15 @@ import two_player_ai.othello.constants as othello_constants
 
 from two_player_ai.game import Game
 from two_player_ai.othello.utils import (
-    binary_board, boards_equal, cannonical_board
+    boards_equal, cannonical_board
 )
 from two_player_ai.othello.zobrist import Zobrist
 
 
 class OthelloBoard(object):
-    def __init__(self, board=None, uid=None):
+    def __init__(self, board=None, uid=None, compute_uid=True):
         self.board = self.initial_board() if board is None else board
-        self.uid = Zobrist.from_state(self) if uid is None else uid
+        self.uid = Zobrist.from_state(self) if not uid and compute_uid else uid
 
     def initial_board(self):
         """
@@ -56,31 +56,10 @@ class OthelloBoard(object):
         return boards_equal(self.board, other.board)
 
     def __hash__(self):
-        return self.uid
+        return self.uid if self.uid else Zobrist.from_state(self)
 
 
 class Othello(Game):
-    """
-    The game of Othello.initial_state
-    """
-    @staticmethod
-    def symmetries(state, policy):
-        board = state.board
-        symmetries = []
-
-        for rotation in range(1, 5):
-            for flip in [True, False]:
-                symmetric_board = np.rot90(board, rotation)
-                symmetric_state = OthelloBoard(board=symmetric_board)
-                symmetric_policy = np.rot90(policy, rotation)
-                if flip:
-                    symmetric_board = np.fliplr(symmetric_board)
-                    symmetric_state = OthelloBoard(board=symmetric_board)
-                    symmetric_policy = np.fliplr(symmetric_policy)
-
-                symmetries.append((symmetric_state, symmetric_policy))
-        return symmetries
-
     @staticmethod
     def board_size():
         return othello_constants.BOARD_SIZE, othello_constants.BOARD_SIZE
@@ -92,6 +71,21 @@ class Othello(Game):
     @staticmethod
     def all_actions():
         return othello_constants.ALL_ACTIONS
+
+    @staticmethod
+    def symmetries(board, policy):
+        symmetries = []
+
+        for rotation in range(1, 5):
+            for flip in [True, False]:
+                symmetric_board = np.rot90(board, rotation)
+                symmetric_policy = np.rot90(policy, rotation)
+                if flip:
+                    symmetric_board = np.fliplr(symmetric_board)
+                    symmetric_policy = np.fliplr(symmetric_policy)
+
+                symmetries.append((symmetric_board, symmetric_policy))
+        return symmetries
 
     @staticmethod
     def initial_state():
@@ -108,7 +102,7 @@ class Othello(Game):
     def cannonical_state(state, player):
         cannonical = state.clone()
         cannonical.board = cannonical_board(cannonical.board, player)
-        return cannonical, player * player
+        return cannonical
 
     @staticmethod
     def actions(state, player):
@@ -238,7 +232,7 @@ class Othello(Game):
         elif black > white:
             return othello_constants.BLACK_PLAYER
         else:
-            return 0.4
+            return 0.5
 
     @staticmethod
     @nb.jit(nopython=True, nogil=True, cache=True)
