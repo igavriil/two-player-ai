@@ -1,7 +1,6 @@
 import numpy as np
 from random import sample
-from two_player_ai.utils import cached_property
-from two_player_ai.utils import normalize, reshape
+from two_player_ai.utils import cached_property, normalize, reshape
 
 
 class MctsTreeNode(object):

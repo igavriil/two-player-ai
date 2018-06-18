@@ -131,8 +131,94 @@ def traverse(node):
         print(node.state.board)
     return h
 
+def board():
+    board_size = 9
+    board = np.zeros(
+        (3, board_size, board_size),
+        dtype=np.int8
+    )
+    center = int(9 / 2)
+    pieces_board = board[0]
+    pieces_board[0][center] = 1
+    pieces_board[board_size - 1][center] = -1
+
+    return board
+
+def flatten(board):
+    flat = np.zeros(
+        (17, 17),
+        dtype=np.int8
+    )
+    pieces = board[0]
+    height, width = pieces.shape
+    for row, col in zip(*np.where(pieces != 0)):
+        flat[2 * row, 2 * col] = pieces[row, col]
+
+    h_fences = board[1]
+    for row, col in zip(*np.where(h_fences != 0)):
+        fences_row = 2 * row + 1
+
+        fence_a_col = 2 * col
+        fence_b_col = 2 * (col + 1)
+        if (0 <= fences_row < 17
+            and 0 <= fence_a_col < 17
+                and 0 <= fence_b_col < 17):
+            flat[fences_row, fence_a_col] = h_fences[row, col] * 2
+            flat[fences_row, fence_b_col] = h_fences[row, col] * 2
+
+    v_fences = board[2]
+    for row, col in zip(*np.where(v_fences != 0)):
+        fences_col = 2 * col + 1
+
+        fence_a_row = 2 * row
+        fence_b_row = 2 * (row + 1)
+        if (0 <= fences_col < 17
+            and 0 <= fence_a_row < 17
+                and 0 <= fence_b_row < 17):
+            flat[fence_a_row, fences_col] = h_fences[row, col] * 2
+            flat[fence_b_row, fences_col] = h_fences[row, col] * 2
+
+    return flat
 
 
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def nb_flatten(board, flat):
+    pieces = board[0]
+    height, width = pieces.shape
+    for row, col in zip(*np.where(pieces != 0)):
+        flat[2 * row, 2 * col] = pieces[row, col]
+
+    h_fences = board[1]
+    for row, col in zip(*np.where(h_fences != 0)):
+        fences_row = 2 * row + 1
+
+        fence_a_col = 2 * col
+        fence_b_col = 2 * (col + 1)
+        if (0 <= fences_row < 17
+            and 0 <= fence_a_col < 17
+                and 0 <= fence_b_col < 17):
+            flat[fences_row, fence_a_col] = h_fences[row, col] * 2
+            flat[fences_row, fence_b_col] = h_fences[row, col] * 2
+
+    v_fences = board[2]
+    for row, col in zip(*np.where(v_fences != 0)):
+        fences_col = 2 * col + 1
+
+        fence_a_row = 2 * row
+        fence_b_row = 2 * (row + 1)
+        if (0 <= fences_col < 17
+            and 0 <= fence_a_row < 17
+                and 0 <= fence_b_row < 17):
+            flat[fence_a_row, fences_col] = h_fences[row, col] * 2
+            flat[fence_b_row, fences_col] = h_fences[row, col] * 2
+
+    return flat
+
+
+0,1,2,3,  4,  5,6,7,8
+
+0,1,2,3,4,5,6,7,8,   9,   10,11,12,13,14,15,16,17,18
 
 
 import json

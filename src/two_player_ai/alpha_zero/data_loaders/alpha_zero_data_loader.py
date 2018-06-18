@@ -74,13 +74,13 @@ class AlphaZeroDataLoader(BaseDataLoader):
                 )
         return episode_results
 
-    def execute_episodes(self, game, model, config):
-        pbar = tqdm(total=6)
-        episode_results = []
+    def execute_episodes(self):
+        pbar = tqdm(total=config[])
+        results = []
 
         for i in range(1):
             episode_results.extend(
-                self.execute_episode(game, model, config)
+                self.execute_episode(self.game, self.model, self.config)
             )
             pbar.update(1)
 

@@ -89,7 +89,7 @@ class Mcts(object):
     @staticmethod
     def uct_node(game, root_node, player, c_puct, iterations):
         for i in range(iterations):
-            node = Mcts.tree_pohttps://github.com/explorelicy(game, root_node, c_puct)
+            node = Mcts.tree_policy(game, root_node, c_puct)
             reward = Mcts.simulate(game, node)
             Mcts.backpropagate(game, node, reward)
         best_child = Mcts.uct_select_child(root_node, 0)
