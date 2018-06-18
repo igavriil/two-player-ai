@@ -92,37 +92,46 @@ def fence_actions(board):
                     np.count_nonzero(vertical_fences))
     actions = set()
 
-    for player in [1, -1]:
-        if player == 1:
-            target = 16
+
+
+
+    for v_action in list(zip(*v_actions)):
+        temp = np.copy(board)
+        temp[2][v_action] = 1
+        flat_board = flatten(temp, np.zeros((17, 17), dtype=np.int8))
+
+        if total_fences < 6:
+            actions.add((1, v_action))
         else:
-            target = 0
+            x1, y1 = np.where(board[0] == 1)
+            x2, y2 = np.where(board[0] == -11)
 
-        x, y = np.where(board[0] == player)
-
-        for v_action in list(zip(*v_actions)):
-            temp = np.copy(board)
-            temp[2][v_action] = 1
-            flat_board = flatten(temp, np.zeros((17, 17), dtype=np.int8))
-
-            if total_fences < 6:
-                actions.add((1, v_action))
-            elif flood_fill(
+            if flood_fill(
                 flat_board,
-                np.zeros((17, 17), dtype=np.int8), (x[0], y[0]), target):
-                actions.add((2, v_action))
+                np.zeros((17, 17), dtype=np.int8),
+                (x1[0], y1[0]),
+                16) and flood_fill(
+                    flat_board,
+                    np.zeros((17, 17), dtype=np.int8),
+                    (x1[0], y1[0]),
+                    16) and flo
 
-        for h_action in list(zip(*h_actions)):
-            temp = np.copy(board)
-            temp[1][v_action] = 1
-            flat_board = flatten(temp, np.zeros((17, 17), dtype=np.int8))
+            flood_fill(
+            flat_board,
+            np.zeros((17, 17), dtype=np.int8), (x[0], y[0]), target):
+            actions.add((2, v_action))
 
-            if total_fences < 6:
-                actions.add((1, h_action))
-            elif flood_fill(
-                flat_board,
-                np.zeros((17, 17), dtype=np.int8), (x[0], y[0]), target):
-                actions.add((1, h_action))
+    for h_action in list(zip(*h_actions)):
+        temp = np.copy(board)
+        temp[1][v_action] = 1
+        flat_board = flatten(temp, np.zeros((17, 17), dtype=np.int8))
+
+        if total_fences < 6:
+            actions.add((1, h_action))
+        elif flood_fill(
+            flat_board,
+            np.zeros((17, 17), dtype=np.int8), (x[0], y[0]), target):
+            actions.add((1, h_action))
 
     return actions
 
