@@ -19,7 +19,8 @@ vertical_actions = []
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def horizontal_actions(horizontal_fences, vertical_fences, aux):
+def horizontal_actions(horizontal_fences, vertical_fences):
+    aux = np.zeros((9, 9), dtype=np.int)
     for row, col in zip(*np.where(horizontal_fences != 0)):
         if vertical_fences[row, col] == 0:
             aux[row, col] = horizontal_fences[row, col]
