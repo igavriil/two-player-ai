@@ -8,6 +8,7 @@ from two_player_ai.quoridor.utils import (
     boards_equal, cannonical_board
 )
 from two_player_ai.quoridor.zobrist import Zobrist
+from two_player_ai.quoridor import board_utils
 
 
 class QuoridorBoard(object):
@@ -27,16 +28,20 @@ class QuoridorBoard(object):
             (3, board_size, board_size),
             dtype=np.int8
         )
-        center = int(9 / 2)
-        pieces_board = board[0]
-        pieces_board[0][center] = 1
-        pieces_board[board_size - 1][center] = -1
+        center = int(board_size / 2)
+        self.pawn_board = board[0]
+        self.horizontal_fences = board[1]
+        self.vertical_fences = board[2]
 
-        return board
+        self.adjacency_matrix = board_utils.create_adjacency_matrix(
+            board_size, board_size
+        )
 
-    def position_id(self, position):
-        i, j = position
-        return i * 9 + j
+        self.pawn_board[0][center] = 1
+        self.pawn_board[board_size - 1][center] = -1
+
+        # player 1  targets pawn_board[board_size - 1]
+        # player -1 targets pawn_board[0]
 
     def clone(self):
         """
@@ -47,50 +52,6 @@ class QuoridorBoard(object):
         """
         return QuoridorBoard(board=np.copy(self.board), uid=self.uid)
 
-    def flat_board(self):
-        aux = np.zeros((17, 17), dtype=np.int8)
-        return QuoridorBoard.flatten(self.board, aux)
-
-    @staticmethod
-    @nb.jit(nopython=True, nogil=True, cache=True)
-    def flatten(board, flat):
-        pieces = board[0]
-        height, width = pieces.shape
-        for row, col in zip(*np.where(pieces != 0)):
-            flat[2 * row, 2 * col] = pieces[row, col]
-
-        h_fences = board[1]
-        for row, col in zip(*np.where(h_fences != 0)):
-            fences_row = 2 * row + 1
-
-            fence_a_col = 2 * col
-            fence_b_col = 2 * (col + 1)
-            if (0 <= fences_row < 17
-                and 0 <= fence_a_col < 17
-                    and 0 <= fence_b_col < 17):
-                flat[fences_row, fence_a_col] = h_fences[row, col] * 2
-                flat[fences_row, fence_b_col] = h_fences[row, col] * 2
-
-        v_fences = board[2]
-        for row, col in zip(*np.where(v_fences != 0)):
-            fences_col = 2 * col + 1
-
-            fence_a_row = 2 * row
-            fence_b_row = 2 * (row + 1)
-            if (0 <= fences_col < 17
-                and 0 <= fence_a_row < 17
-                    and 0 <= fence_b_row < 17):
-                flat[fence_a_row, fences_col] = h_fences[row, col] * 2
-                flat[fence_b_row, fences_col] = h_fences[row, col] * 2
-
-        return flat
-
-    def binary_form(self, wrap=True):
-        if wrap:
-            return np.array([np.array([self.board])])
-        else:
-            return np.array([self.board])
-
     def __eq__(self, other):
         return boards_equal(self.board, other.board)
 
@@ -99,32 +60,6 @@ class QuoridorBoard(object):
 
 
 class Quoridor(Game):
-    @staticmethod
-    def board_size():
-        return quoridor_constants.BOARD_SIZE, quoridor_constants.BOARD_SIZE
-
-    @staticmethod
-    def action_size():
-        return quoridor_constants.BOARD_SIZE * quoridor_constants.BOARD_SIZE
-
-    @staticmethod
-    def all_actions():
-        return quoridor_constants.ALL_ACTIONS
-
-    @staticmethod
-    def symmetries(board, policy):
-        symmetries = []
-
-        for rotation in range(1, 5):
-            for flip in [True, False]:
-                symmetric_board = np.rot90(board, rotation)
-                symmetric_policy = np.rot90(policy, rotation)
-                if flip:
-                    symmetric_board = np.fliplr(symmetric_board)
-                    symmetric_policy = np.fliplr(symmetric_policy)
-
-                symmetries.append((symmetric_board, symmetric_policy))
-        return symmetries
 
     @staticmethod
     def initial_state():
@@ -135,7 +70,7 @@ class Quoridor(Game):
                  player playing
 
         """
-        return Quoridor(), quoridor_constants.WHITE_PLAYER
+        return QuoridorBoard(), quoridor_constants.WHITE_PLAYER
 
     @staticmethod
     def cannonical_state(state, player):

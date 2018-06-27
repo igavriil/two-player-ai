@@ -119,6 +119,72 @@ def fence_actions(board_size, horizontal_fences, vertical_fences):
             unsafe_vertical)
 
 
+@nb.jit(nopython=True, nogil=True, cache=True, fastmath=True):
+def valid_pawn_actions(board, adj_matrix, player):
+    player_position = np.where(board == player)
+    player_row, player_col = player_position
+    player_row, player_col = player_row[0], player_col[0]
+
+    opponent_position = np.where(board == -player)
+    opponent_row, opponent_col = opponent_position
+    opponent_row, opponent_col = opponent_row[0], opponent_col[0]
+
+    size = board[0].size
+    actions = []
+
+    for row_offset, col_offset in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+        target_row = row + row_offset
+        target_col = col + col_offset
+
+        if 0 <= target_row < size and 0 <= target_col < size:
+            if adj_matrix[size * row + col, size * target_col + target_row]:
+                if board[target_row, target_col] == -player:
+                    if row_offset == 0:
+                        hop_row = row + 2 * row_offset
+                        hop_col = col + 2 * col_offset
+                        if 0 <= hop_row < size and 0 <= hop_col < size:
+                            if adj_matrix[
+                                size * target_row + target_col,
+                                size * hop_col + hop_row
+                            ]:
+                                actions.append((target_row, target_col))
+                        else:
+                            for side_row_offset in [1, -1]:
+                                side_hop_row = target_row + side_row_offset
+                                if 0 <= side_hop_row < size:
+                                    if adj_matrix[
+                                        size * target_row + target_col,
+                                        size * side_hop_row + target_col
+                                    ]:
+                                        actions.append(
+                                            (side_hop_row, target_col)
+                                        )
+                    else:  # col_offset == 0
+                        hop_row = row + 2 * row_offset
+                        hop_col = col + 2 * col_offset
+                        if 0 <= hop_row < size and 0 <= hop_col < size:
+                            if adj_matrix[
+                                size * target_row + target_col,
+                                size * hop_col + hop_row
+                            ]:
+                                actions.append((target_row, target_col))
+                        else:
+                            for side_col_offset in [1, -1]:
+                                side_hop_col = target_col + side_col_offset
+                                if 0 <= side_hop_col < size:
+                                    if adj_matrix[
+                                        size * target_row + target_col,
+                                        size * target_row + side_hop_col
+                                    ]:
+                                        actions.append(
+                                            (target_row, side_hop_col)
+                                        )
+                else:
+                    actions.append((target_row, target_col))
+
+    return actions
+
+
 @nb.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def valid_fence_actions(board, horizontal_fences, vertical_fences, adj_matrix):
     (invalid_horizontal,
