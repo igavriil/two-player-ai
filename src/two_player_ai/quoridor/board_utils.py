@@ -119,7 +119,7 @@ def fence_actions(board_size, horizontal_fences, vertical_fences):
             unsafe_vertical)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, fastmath=True):
+@nb.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def valid_pawn_actions(board, adj_matrix, player):
     player_position = np.where(board == player)
     player_row, player_col = player_position
@@ -372,25 +372,30 @@ def connected_components(matrix, source):
     """
     vertices = matrix[0].size
 
-    queue = np.zeros(vertices, dtype=np.int8)
+    queue = np.zeros(vertices + 1, dtype=np.int32)
     queue_start = 0
     queue[queue_start] = source
     queue_items = 1
     queue_end = 1
 
-    components = np.zeros(vertices, dtype=np.int8)
+    components = np.zeros(vertices, dtype=np.int32)
 
     while queue_items:
         current = queue[queue_start]
         queue_start += 1
         queue_items -= 1
 
+        depth = components[current]
+
         for i in range(vertices):
-            if matrix[current][i] and components[i] != 1:
-                components[i] += 1
+            if matrix[current][i] and components[i] == 0:
+                components[i] = depth + 1
                 queue[queue_end] = i
                 queue_end += 1
                 queue_items += 1
 
     rows = cols = np.int_(np.sqrt(vertices))
     return np.reshape(components, (rows, cols))
+
+
+def shortest_paths(matrix, source, destination):
