@@ -368,7 +368,8 @@ def connected_components(matrix, source):
         source: The source vertex
     Returns:
         A 1-d array of size equal number of vertices where non-zero
-        elements denote connectivity with the source vertex.
+        elements denote connectivity with the source vertex at depth
+        equal to the value stored in the array.
     """
     vertices = matrix[0].size
 
@@ -398,4 +399,53 @@ def connected_components(matrix, source):
     return np.reshape(components, (rows, cols))
 
 
-def shortest_paths(matrix, source, destination):
+@nb.jit(nopython=True, nogil=True, cache=True, fastmath=False)
+def astar(matrix, source, target):
+    vertices = matrix[0].size
+    dim = np.int_(np.sqrt(vertices))
+
+    closed_set = np.zeros(vertices, dtype=np.int8)
+    open_set = np.inf * np.ones(vertices)
+    g_score = np.inf * np.ones(vertices)
+    f_score = np.inf * np.ones(vertices)
+    came_from = np.zeros(vertices, dtype=np.int8)
+
+    source_row, source_col = np.floor_divide(source, dim), np.mod(source, dim)
+    target_row, target_col = np.floor_divide(target, dim), np.mod(target, dim)
+
+    open_set[source] = 1
+    g_score[source] = 0
+    f_score[source] = (np.abs(source_row - target_row) +
+                       np.abs(source_col - target_col))
+
+    while np.any(open_set == 1):
+        current = np.argmin(f_score * open_set)
+        if current == target:
+            path = [current]
+            while came_from[current] != source:
+                current = came_from[current]
+                path.append(current)
+            return path
+
+        open_set[current] = np.inf
+        closed_set[current] = 1
+
+        for i in range(vertices):
+            if matrix[current][i]:
+                if closed_set[i]:
+                    continue
+
+                if open_set[i] == np.inf:
+                    open_set[i] = 1
+
+                t_score = g_score[current] + 1
+                if t_score >= g_score[i]:
+                    continue
+
+                source_row = np.floor_divide(i, dim)
+                source_col = np.mod(i, dim)
+
+                came_from[i] = current
+                g_score[i] = t_score
+                f_score[i] = g_score[i] + (np.abs(source_row - target_row) +
+                                           np.abs(source_col - target_col))

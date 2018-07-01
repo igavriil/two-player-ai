@@ -91,43 +91,6 @@ class Quoridor(Game):
         board = state.board
 
     @staticmethod
-    def pawn_actions(board, player):
-        size = board[0].size
-
-        row, col = np.where(board == player)
-        row, col = row[0], col[0]
-
-        actions = []
-
-        for hdir, vdir in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-            if 0 <= row + hdir < size and 0 <= col + vdir < size:
-                if board[row + hdir, col + vdir] != 2:
-                    if board[row + 2 * hdir, col + 2 * vdir] == 0:
-                        actions.append((row + 2 * hdir, col + 2 * vdir))
-                    elif board[row + 2 * hdir, col + 2 * vdir] == -player:
-                        target_fence = board[row + 3 * hdir, col + 3 * vdir]
-                        if target_fence == 2:
-                            if hdir == 0:
-                                h_neighbor_dirs = (1, -1)
-                                for h_neighbor_dir in h_neighbor_dirs:
-                                    if board[row + h_neighbor_dir, col + 2 * vdir] != 2:
-                                        actions.append((row + 2 * h_neighbor_dir, col + 4 * vdir))
-                            elif vdir == 0:
-                                v_neighbor_dirs = (1, -1)
-                                for v_neighbor_dir in v_neighbor_dirs:
-                                    if board[row + 2 * hdir, col + v_neighbor_dir] != 2:
-                                        actions.append((row + 2 * hdir, col + 2 * v_neighbor_dir))
-                        else:
-                            actions.append((row + 4 * hdir, col + 4 * vdir))
-
-        return actions
-
-    def foo(state, position):
-        if board[x + hdir, y + hdir] != WALL:
-
-
-
-    @staticmethod
     def result(state, player, action):
         """
         The resulting state that is produced when the
